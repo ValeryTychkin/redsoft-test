@@ -1,0 +1,47 @@
+version: '3.9'
+
+
+services:
+
+  backend:
+    build:
+      context: ../
+      dockerfile: ci/docker/app-backend/Dockerfile
+    restart: on-failure
+    tty: true
+    volumes:
+      - "../app/backend/:/var/app/"
+    env_file:
+      - ".env"
+    ports:
+      - "${BACKEND_PORT}:8000"
+    depends_on:
+      psql:
+        condition: service_healthy
+    environment:
+      DSN__DATABASE: 'postgresql://${PSQL_USER}:${PSQL_PASS}@psql:5432/${PSQL_DB}'
+    command: >
+      bash -c "python3 /var/app/src/manage.py migrate && 
+      python3 /var/app/src/manage.py loaddata /var/app/src/redsoft/fixtures/dev.json && 
+      python3 /var/app/src/manage.py runserver 0.0.0.0:8000"
+
+  psql:
+    image: postgres:13-alpine
+    ports:
+      - '${PSQL_PORT}:5432'
+    volumes:
+      - "psql_data:/var/lib/postgresql/data"
+    restart: always
+    environment:
+      POSTGRES_USER: ${PSQL_USER}
+      POSTGRES_PASSWORD: ${PSQL_PASS}
+      POSTGRES_DB: ${PSQL_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PSQL_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+volumes:
+  psql_data: { }
